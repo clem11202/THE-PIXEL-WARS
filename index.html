@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>THE PIXEL WAR - 3D EVOLUTION ⚔️</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Orbitron', sans-serif; color: white; }
+        canvas#gameCanvas { position: absolute; top: 0; left: 0; z-index: 1; }
+        #ui-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+        #ui-overlay * { pointer-events: auto; }
+
+        /* Login */
+        #login-screen { position: fixed; inset: 0; background: radial-gradient(circle, #1a1a1a, #000); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .input-group { margin: 10px; }
+        input { padding: 12px; border-radius: 5px; border: 1px solid #ff4444; background: #111; color: white; width: 250px; }
+        
+        /* Menu Arsenal */
+        #side-menu { position: fixed; left: 15px; top: 50%; transform: translateY(-50%); width: 220px; background: rgba(0,0,0,0.8); border-left: 4px solid #ff4444; padding: 15px; border-radius: 0 15px 15px 0; }
+        .btn { display: block; width: 100%; padding: 10px; margin: 8px 0; background: #222; color: #eee; border: 1px solid #444; cursor: pointer; transition: 0.3s; text-transform: uppercase; font-size: 10px; }
+        .btn:hover { background: #ff4444; color: white; }
+        .btn-gold { border-color: gold; color: gold; opacity: 0.6; cursor: not-allowed; }
+
+        #alert-box { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(255,0,0,0.8); padding: 10px 20px; border-radius: 5px; display: none; animation: shake 0.5s; }
+        @keyframes shake { 0%, 100% {transform: translateX(-50%);} 25% {transform: translateX(-55%);} 75% {transform: translateX(-45%);} }
+    </style>
+</head>
+<body>
+
+<div id="login-screen">
+    <h1 style="color: #ff4444; letter-spacing: 5px;">THE PIXEL WAR 3D</h1>
+    <div class="input-group">
+        <input type="text" id="username" placeholder="Pseudo...">
+    </div>
+    <div class="input-group">
+        <input type="password" id="password" placeholder="Mot de passe...">
+    </div>
+    <button class="btn" style="width: 275px; font-size: 14px;" onclick="handleAuth()">DÉPLOYER</button>
+    <p id="login-error" style="color: red; font-size: 12px; margin-top: 10px;"></p>
+</div>
+
+<div id="ui-overlay">
+    <div id="alert-box">⚠️ ALERTE : B-BOT DÉTRUIT ! ⚠️</div>
+    
+    <div id="side-menu">
+        <div style="font-size: 12px; color: #666; margin-bottom: 10px;">COMMANDANT: <span id="display-name" style="color:white">?</span></div>
+        <div id="pixel-val" style="font-size: 24px; color: #0f0; margin-bottom: 20px;">0 PX</div>
+        
+        <button class="btn" onclick="selectWeapon('bomb')">💣 BOMBE 3D (50 px)</button>
+        <button class="btn" onclick="buyBot()">🤖 B-BOT MIGNON (200 px)</button>
+        <button class="btn btn-gold">🎁 SOUTIEN (INDISPONIBLE)</button>
+    </div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+    // --- INITIALISATION ---
+    const firebaseConfig = { databaseURL: "https://the-pixel-war-default-rtdb.firebaseio.com/" };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let user = null, pixels = 0, currentWeapon = 'pixel';
+    
+    // --- SYSTEME LOGIN ---
+    async function handleAuth() {
+        const name = document.getElementById('username').value.trim();
+        const pass = document.getElementById('password').value;
+        const errorEl = document.getElementById('login-error');
+
+        if(name.length < 3) return errorEl.innerText = "Pseudo trop court !";
+
+        const snapshot = await db.ref('users/' + name).once('value');
+        const userData = snapshot.val();
+
+        if(userData) {
+            if(userData.pass === pass) {
+                loadUser(name, userData);
+            } else {
+                errorEl.innerText = "Pseudo déjà utilisé ou mauvais mot de passe !";
+            }
+        } else {
+            // Création nouveau compte
+            const newUser = { pass: pass, pixels: 100, bots: 0 };
+            await db.ref('users/' + name).set(newUser);
+            loadUser(name, newUser);
+        }
+    }
+
+    function loadUser(name, data) {
+        user = name;
+        pixels = data.pixels;
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('display-name').innerText = name;
+        startApp();
+    }
+
+    // --- MOTEUR 3D SIMPLE POUR LES EFFETS ---
+    function explode3D(x, y) {
+        // Ici on pourrait ajouter Three.js pour une sphère, 
+        // mais pour rester fluide sur GitHub on simule l'onde de choc
+        const flash = document.createElement('div');
+        flash.style.cssText = `
+            position: fixed; left: ${x}px; top: ${y}px;
+            width: 10px; height: 10px; background: orange;
+            box-shadow: 0 0 100px 50px red; border-radius: 50%;
+            pointer-events: none; z-index: 5; transition: 0.5s;
+            transform: translate(-50%, -50%) scale(0);
+        `;
+        document.body.appendChild(flash);
+        setTimeout(() => flash.style.transform = 'translate(-50%, -50%) scale(20)', 50);
+        setTimeout(() => flash.remove(), 600);
+    }
+
+    // --- LOGIQUE JEU ---
+    function startApp() {
+        setInterval(() => {
+            pixels += 1;
+            document.getElementById('pixel-val').innerText = pixels + " PX";
+            db.ref('users/' + user + '/pixels').set(pixels);
+        }, 2000);
+    }
+
+    function buyBot() {
+        if(pixels >= 200) {
+            pixels -= 200;
+            alert("B-Bot déployé ! (Il génère du pixel)");
+        }
+    }
+
+    // Écouteur pour les destructions (simulation)
+    db.ref('alerts/' + user).on('value', s => {
+        if(s.val()) {
+            document.getElementById('alert-box').style.display = 'block';
+            setTimeout(() => {
+                document.getElementById('alert-box').style.display = 'none';
+                db.ref('alerts/' + user).remove();
+            }, 3000);
+        }
+    });
+
+    window.addEventListener('click', (e) => {
+        if(!user) return;
+        explode3D(e.clientX, e.clientY);
+    });
+
+</script>
+</body>
+</html>
