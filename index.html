@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>THE PIXEL WAR - 3D & GUEST ⚔️</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; color: white; }
+        canvas { display: block; }
+        
+        /* Overlay de Login Amélioré */
+        #auth-screen { position: fixed; inset: 0; background: radial-gradient(circle, #222, #000); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+        .box { background: rgba(255,255,255,0.05); padding: 30px; border-radius: 20px; border: 1px solid #ff4444; }
+        input { display: block; width: 250px; padding: 12px; margin: 10px 0; border-radius: 8px; border: none; background: #111; color: white; }
+        
+        .btn { padding: 12px 25px; margin: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .btn-main { background: #ff4444; color: white; width: 100%; }
+        .btn-guest { background: #444; color: #ccc; }
+        .btn-main:hover { background: #ff6666; transform: scale(1.05); }
+
+        /* Interface Jeu */
+        #game-ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 100; }
+        #side-bar { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); pointer-events: auto; background: rgba(0,0,0,0.8); padding: 20px; border-radius: 15px; border-left: 5px solid #ff4444; }
+        
+        /* L'effet d'explosion 3D (CSS) */
+        .boom { position: absolute; border-radius: 50%; background: radial-gradient(circle, #fff, #ffae00, transparent); pointer-events: none; transform: translate(-50%, -50%); animation: explode 0.6s ease-out forwards; z-index: 50; }
+        @keyframes explode { 0% { width: 0; height: 0; opacity: 1; } 100% { width: 300px; height: 300px; opacity: 0; } }
+
+        .bot-alert { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: red; padding: 10px 20px; border-radius: 10px; display: none; }
+    </style>
+</head>
+<body>
+
+<div id="auth-screen">
+    <div class="box">
+        <h1 style="margin-bottom: 5px;">THE PIXEL WAR</h1>
+        <p style="color: #888; font-size: 14px; margin-bottom: 20px;">Choisis ton mode de déploiement</p>
+        
+        <input type="text" id="username" placeholder="Ton Pseudo...">
+        <input type="password" id="password" placeholder="Mot de passe (pour sauver)">
+        
+        <button class="btn btn-main" onclick="start(false)">SE CONNECTER / CRÉER</button>
+        <button class="btn btn-guest" onclick="start(true)">JOUER EN INVITÉ</button>
+        
+        <p id="msg" style="color: #ff4444; font-size: 12px; margin-top: 10px;"></p>
+    </div>
+</div>
+
+<div id="game-ui">
+    <div id="side-bar">
+        <div style="color: gold; font-size: 12px;">COMMANDANT</div>
+        <div id="name-tag" style="font-size: 18px; margin-bottom: 15px;">---</div>
+        
+        <div style="color: #0f0; font-size: 24px; font-weight: bold;" id="px-count">0 PX</div>
+        <hr style="opacity: 0.2; margin: 15px 0;">
+        
+        <button class="btn btn-main" style="font-size: 10px;" onclick="buyBot()">🤖 B-BOT MIGNON (200 PX)</button>
+        <button class="btn" style="background: #222; color: gold; font-size: 10px; cursor: not-allowed;">🎁 SOUTIEN (INDISPONIBLE)</button>
+    </div>
+    <div class="bot-alert" id="alert">🚨 TON B-BOT A ÉTÉ DÉTRUIT !</div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+    // Config Firebase (Utilise ta base actuelle)
+    const firebaseConfig = { databaseURL: "https://the-pixel-war-default-rtdb.firebaseio.com/" };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let player = { name: "", pixels: 100, isGuest: false };
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    async function start(asGuest) {
+        const nameInput = document.getElementById('username').value.trim();
+        const passInput = document.getElementById('password').value;
+        const msg = document.getElementById('msg');
+
+        if (asGuest) {
+            player.name = nameInput || "Soldat_" + Math.floor(Math.random()*999);
+            player.isGuest = true;
+        } else {
+            if (nameInput.length < 3) return msg.innerText = "Pseudo trop court !";
+            
+            const snap = await db.ref('users/' + nameInput).once('value');
+            if (snap.exists()) {
+                if (snap.val().pass !== passInput) return msg.innerText = "Pseudo déjà pris ou mauvais mot de passe !";
+                player.pixels = snap.val().pixels;
+            } else {
+                await db.ref('users/' + nameInput).set({ pass: passInput, pixels: 100 });
+            }
+            player.name = nameInput;
+        }
+
+        document.getElementById('auth-screen').style.display = 'none';
+        document.getElementById('name-tag').innerText = player.name;
+        initGame();
+    }
+
+    function initGame() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        // Gain de pixels automatique
+        setInterval(() => {
+            player.pixels += 1;
+            document.getElementById('px-count').innerText = Math.floor(player.pixels) + " PX";
+            if (!player.isGuest) db.ref('users/' + player.name + '/pixels').set(player.pixels);
+        }, 1000);
+
+        // Dessin de la map (fond)
+        function draw() {
+            ctx.fillStyle = "#111";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            requestAnimationFrame(draw);
+        }
+        draw();
+    }
+
+    // Effet d'explosion 3D sans texte
+    window.addEventListener('mousedown', (e) => {
+        if (player.name === "") return;
+        
+        const b = document.createElement('div');
+        b.className = 'boom';
+        b.style.left = e.clientX + 'px';
+        b.style.top = e.clientY + 'px';
+        document.body.appendChild(b);
+        setTimeout(() => b.remove(), 600);
+        
+        // Ici on pourrait ajouter le code pour placer un pixel sur la grille
+    });
+
+    function buyBot() {
+        if (player.pixels >= 200) {
+            player.pixels -= 200;
+            // Logique pour faire apparaître le bot 3D mignon ici
+            alert("🤖 B-Bot déployé ! Il te protège.");
+        } else {
+            alert("Pas assez de pixels !");
+        }
+    }
+</script>
+</body>
+</html>
