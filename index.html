@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>THE PIXEL WAR - ULTIMATE ⚔️</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; }
+        canvas { cursor: crosshair; image-rendering: pixelated; display: block; }
+        
+        /* Animations */
+        @keyframes nuke-flash { 0% { background: white; opacity: 1; } 100% { background: transparent; opacity: 0; } }
+        .flash-effect { position: fixed; top:0; left:0; width:100%; height:100%; z-index: 9999; pointer-events: none; }
+        
+        @keyframes shake { 0%, 100% { transform: translate(0,0); } 25% { transform: translate(-5px, 5px); } 50% { transform: translate(5px, -5px); } 75% { transform: translate(-5px, -5px); } }
+        .shaking { animation: shake 0.2s infinite; }
+
+        /* Menus */
+        #side-menu { position: fixed; left: 15px; top: 15px; bottom: 15px; width: 180px; background: rgba(0,0,0,0.85); 
+                     border: 2px solid #ff4444; padding: 10px; border-radius: 10px; z-index: 100; overflow-y: auto; }
+        
+        .section-title { font-size: 12px; color: #ff4444; text-align: center; margin: 10px 0 5px; text-transform: uppercase; border-bottom: 1px solid #444; }
+        
+        .btn { display: block; width: 100%; padding: 8px; margin: 5px 0; background: #222; color: #eee; 
+               border: 1px solid #444; cursor: pointer; font-size: 10px; text-align: left; transition: 0.2s; border-radius: 4px; }
+        .btn:hover { background: #444; border-color: #fff; }
+        .btn.active { border-color: #0f0; color: #0f0; box-shadow: 0 0 8px #0f0; }
+
+        #dev-btn { position: fixed; top: 15px; right: 15px; background: #333; color: #555; border: none; padding: 5px 10px; 
+                   border-radius: 5px; cursor: pointer; font-size: 10px; z-index: 100; }
+        #dev-btn:hover { color: #0f0; }
+
+        #ui-bottom { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); 
+                     background: #111; padding: 15px 30px; border-radius: 15px; display: flex; 
+                     align-items: center; gap: 25px; border: 2px solid #ff4444; box-shadow: 0 0 20px rgba(255,0,0,0.5); }
+        
+        .stat { text-align: center; line-height: 1.2; }
+        .val { color: #0f0; font-size: 24px; font-weight: bold; text-shadow: 0 0 10px #0f0; }
+        
+        #nuke-msg { position: fixed; top: 20%; left: 50%; transform: translate(-50%, -50%); 
+                    font-size: 60px; color: #ff0000; display: none; z-index: 1000; text-align: center; font-weight: 900; }
+    </style>
+</head>
+<body id="body">
+
+<div id="flash" class="flash-effect"></div>
+<div id="nuke-msg">☢️ NUKE DETONATED ☢️</div>
+
+<button id="dev-btn" onclick="askCode()">DEV_CODE</button>
+
+<div id="side-menu">
+    <div class="section-title">Armes</div>
+    <button class="btn active" onclick="setW(0, 1)">Pistolet (1)</button>
+    <button class="btn" onclick="setW(1, 4)">Bombe 2x2 (4)</button>
+    <button class="btn" onclick="setW(2, 25)">Moyenne 5x5 (25)</button>
+    <button class="btn" onclick="setW(3, 100)" style="color:#f0f">NUKE 50x50 (100)</button>
+
+    <div class="section-title">B-BOTS (Auto)</div>
+    <button class="btn" onclick="buyBot(1, 50)">B-Bot v1 (+1/s) - 50px</button>
+    <button class="btn" onclick="buyBot(5, 200)">B-Bot v2 (+5/s) - 200px</button>
+    <button class="btn" onclick="buyBot(20, 1000)">B-Bot MEGA (+20/s) - 1000px</button>
+</div>
+
+<div id="ui-bottom">
+    <div class="stat">PIXELS<br><span id="pixelCount" class="val">10</span></div>
+    <input type="color" id="colorPicker" value="#ff4444" style="width:40px; height:40px; border:none; background:none; cursor:pointer;">
+    <div class="stat">REVENU<br><span id="mpsCount" style="color:cyan">+1/5s</span></div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+    // --- CONFIG ---
+    const firebaseConfig = { databaseURL: "https://the-pixel-war-default-rtdb.firebaseio.com/" };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database().ref('war_v3');
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    let pixels = 10, mps = 0, nextTick = 5, pixelsMap = {}, currentW = 0, cost = 1;
+    let width = canvas.width = window.innerWidth, height = canvas.height = window.innerHeight;
+    let camera = { x: 5000*50, y: 5000*50, zoom: 0.05 }, isDragging = false, lastPos = {x:0, y:0};
+
+    // --- LOGIQUE ---
+    function setW(id, c) { currentW = id; cost = c; 
+        document.querySelectorAll('.btn').forEach((b,i) => b.classList.toggle('active', i === id)); }
+
+    function buyBot(power, price) {
+        if(pixels >= price) { pixels -= price; mps += power; }
+        else { alert("Pas assez de pixels !"); }
+    }
+
+    function askCode() {
+        let code = prompt("Entrez le code secret :");
+        if(code === "C26062012s!") { pixels += 10000000; alert("CODE ACCEPTÉ : PIXELS INFINIS !"); }
+    }
+
+    db.on('value', s => { pixelsMap = s.val() || {}; });
+
+    // Boucle de revenus
+    setInterval(() => {
+        nextTick--;
+        if(nextTick <= 0) { pixels += (1 + mps); nextTick = 5; }
+        document.getElementById('pixelCount').innerText = Math.floor(pixels);
+        document.getElementById('mpsCount').innerText = "+" + (1 + mps) + "/5s";
+    }, 1000);
+
+    function useWeapon(gx, gy) {
+        if(pixels < cost) return;
+        let updates = {};
+        let sizes = [1, 2, 5, 50];
+        let s = sizes[currentW];
+        let color = document.getElementById('colorPicker').value;
+
+        // Animations
+        if(s >= 5) document.getElementById('body').classList.add('shaking');
+        if(s === 50) {
+            document.getElementById('flash').style.animation = "nuke-flash 1.5s forwards";
+            document.getElementById('nuke-msg').style.display = 'block';
+            setTimeout(() => { 
+                document.getElementById('body').classList.remove('shaking');
+                document.getElementById('flash').style.animation = "";
+                document.getElementById('nuke-msg').style.display = 'none';
+            }, 2000);
+        } else {
+            setTimeout(() => document.getElementById('body').classList.remove('shaking'), 300);
+        }
+
+        let off = Math.floor(s/2);
+        for(let x=-off; x<s-off; x++) {
+            for(let y=-off; y<s-off; y++) {
+                updates[`${gx+x}_${gy+y}`] = color;
+            }
+        }
+        db.update(updates);
+        pixels -= cost;
+    }
+
+    // --- MOTEUR ---
+    function draw() {
+        ctx.fillStyle = "#000"; ctx.fillRect(0,0,width,height);
+        ctx.save();
+        ctx.translate(width/2, height/2); ctx.scale(camera.zoom, camera.zoom); ctx.translate(-camera.x, -camera.y);
+        ctx.fillStyle = "#0a0a0a"; ctx.fillRect(0,0, 10000*50, 10000*50);
+        for(let p in pixelsMap) {
+            let [x,y] = p.split('_').map(Number);
+            ctx.fillStyle = pixelsMap[p]; ctx.fillRect(x*50, y*50, 50, 50);
+        }
+        ctx.restore();
+        requestAnimationFrame(draw);
+    }
+
+    canvas.addEventListener('mousedown', e => { isDragging = true; lastPos = {x:e.clientX, y:e.clientY}; });
+    window.addEventListener('mouseup', e => {
+        if(Math.hypot(e.clientX-lastPos.x, e.clientY-lastPos.y) < 5) {
+            let wx = (e.clientX-width/2)/camera.zoom + camera.x;
+            let wy = (e.clientY-height/2)/camera.zoom + camera.y;
+            useWeapon(Math.floor(wx/50), Math.floor(wy/50));
+        }
+        isDragging = false;
+    });
+    window.addEventListener('mousemove', e => {
+        if(isDragging) {
+            camera.x -= (e.clientX-lastPos.x)/camera.zoom;
+            camera.y -= (e.clientY-lastPos.y)/camera.zoom;
+            lastPos = {x:e.clientX, y:e.clientY};
+        }
+    });
+    canvas.addEventListener('wheel', e => { camera.zoom *= e.deltaY > 0 ? 0.8 : 1.2; });
+    draw();
+</script>
+</body>
+</html>
