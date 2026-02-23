@@ -1,4 +1,15 @@
-// ============================================================
+// --- INITIALISATION FIREBASE ---
+const firebaseConfig = {
+    // COLLE TES INFOS ICI
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const pixelsRef = db.ref('pixels');
+
+// --- LE RESTE DE TON CODE COMMENCE ICI ---
+let px = 100;
+// ... (garde tout le reste de ton code)// ============================================================
 // CYBER-INTERFACE OMEGA - JAVASCRIPT CORE
 // Version: 4.0.0 (Extended Edition)
 // ============================================================
