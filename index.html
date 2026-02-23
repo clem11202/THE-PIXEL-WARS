@@ -4,37 +4,71 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Pixel Universe OMEGA | Online Global War</title>
+    
     <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
+    
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
 </head>
+
 <body onload="initGame()">
+
+    <div class="vfx-grain"></div>
+    <div class="scanlines"></div>
+    <div id="nuke-flash" class="vfx-overlay"></div>
 
     <div id="auth-overlay">
         <div class="glass-card main-auth">
+            <div class="auth-decoration corner-tl"></div>
+            <div class="auth-decoration corner-br"></div>
+            
             <div class="logo-area">
-                <h1 class="glitch" data-text="PIXEL UNIVERSE OMEGA">PIXEL UNIVERSE <span style="color:#00f2ff">OMEGA</span></h1>
-                <p class="server-status">SERVEUR: <span style="color: #00ff00;">OPÉRATIONNEL</span> • v2.0.4</p>
+                <h1 class="glitch" data-text="PIXEL UNIVERSE OMEGA">
+                    PIXEL UNIVERSE <span class="neon-text">OMEGA</span>
+                </h1>
+                <div class="status-container">
+                    <span class="pulse-dot"></span>
+                    <p class="server-status">SERVEUR: <span id="ping-val">OPÉRATIONNEL</span> • v2.0.4-TITAN</p>
+                </div>
             </div>
 
             <div id="login-form-container">
-                <div class="input-wrapper">
-                    <input type="text" id="reg-pseudo" placeholder="Nom de Guerrier" autocomplete="off">
+                <div class="input-group">
+                    <div class="input-wrapper">
+                        <span class="input-icon">👤</span>
+                        <input type="text" id="reg-pseudo" placeholder="Nom de Guerrier" autocomplete="off">
+                    </div>
                 </div>
-                <div class="input-wrapper">
-                    <input type="password" id="reg-pass" placeholder="Clé d'accès">
+                <div class="input-group">
+                    <div class="input-wrapper">
+                        <span class="input-icon">🔑</span>
+                        <input type="password" id="reg-pass" placeholder="Clé d'accès">
+                    </div>
                 </div>
-                <button id="login-button" class="glow-btn" onclick="login()">REJOINDRE LA GUERRE</button>
+                <button id="login-button" class="glow-btn" onclick="login()">
+                    <span class="btn-shine"></span>
+                    REJOINDRE LA GUERRE
+                </button>
             </div>
 
             <div class="news-section">
-                <h3>📢 DERNIÈRES NEWS</h3>
-                <ul>
-                    <li>• Nouveau <strong>B-BOT V5</strong> déployé !</li>
-                    <li>• Événement "Trou Noir" ce week-end.</li>
-                    <li>• Amélioration de la stabilité du chat.</li>
+                <div class="news-header">
+                    <h3>📢 TRANSMISSION PRIORITAIRE</h3>
+                    <span class="news-date">24/02/2026</span>
+                </div>
+                <ul class="news-list">
+                    <li><span class="tag new">NEW</span> • Système de <strong>Quêtes OMEGA</strong> activé !</li>
+                    <li><span class="tag update">UPD</span> • <strong>Trou Noir</strong> : Aspiration réelle activée.</li>
+                    <li><span class="tag security">IA</span> • <strong>IA SENTRY</strong> : Les insultes sont désormais bannies.</li>
+                    <li><span class="tag bug">FIX</span> • Correction du transfert de cadeaux PX.</li>
                 </ul>
+            </div>
+            
+            <div class="auth-footer">
+                <p>Connectés: <span id="online-count">...</span> guerriers</p>
             </div>
         </div>
     </div>
@@ -42,10 +76,22 @@
     <div id="game-ui">
         
         <div id="viewport">
-            <div id="canvas" class="pixel-grid-bg"></div>
+            <div id="canvas" class="pixel-grid-bg">
+                </div>
+            
+            <div class="zoom-indicator">
+                <span class="zoom-label">ZOOM</span>
+                <div class="zoom-bar"><div id="zoom-fill"></div></div>
+                <span id="zoom-val">1.0x</span>
+            </div>
         </div>
 
         <div class="map-controls">
+            <div class="zoom-btns">
+                <button class="nav-btn zoom-in" onclick="changeZoom('in')">+</button>
+                <button class="nav-btn zoom-out" onclick="changeZoom('out')">-</button>
+            </div>
+            
             <button class="nav-btn up" onclick="moveMap('up')">▲</button>
             <div class="nav-mid">
                 <button class="nav-btn left" onclick="moveMap('left')">◀</button>
@@ -57,119 +103,263 @@
 
         <div class="panel" id="chat">
             <div class="panel-header" onclick="togglePanel('chat')">
-                <span class="pulse-icon"></span> 💬 CHAT MONDIAL <span class="toggle-icon">▾</span>
+                <div class="header-left">
+                    <span class="pulse-icon active"></span> 
+                    💬 CHAT MONDIAL 
+                </div>
+                <span class="toggle-icon">▾</span>
             </div>
             <div class="panel-body">
+                <div class="ia-sentry-status">
+                    <span class="sentry-icon">🤖</span>
+                    <span id="sentry-msg">SENTRY IA: Surveillance active</span>
+                </div>
                 <div id="chat-box" class="chat-messages"></div>
                 <div class="chat-input-wrapper">
-                    <input type="text" id="chatInput" placeholder="Message..." maxlength="100">
-                    <button class="mini-send" onclick="sendMessage()">OK</button>
+                    <input type="text" id="chatInput" placeholder="Tapez sans haine..." maxlength="100">
+                    <button class="mini-send" onclick="sendMessage()">ENVOYER</button>
                 </div>
             </div>
         </div>
 
         <div class="panel" id="leaderboard">
-            <div class="panel-header" onclick="togglePanel('leaderboard')">🏆 TOP ÉLITE <span class="toggle-icon">▾</span></div>
+            <div class="panel-header" onclick="togglePanel('leaderboard')">
+                🏆 CLASSEMENT OMEGA <span class="toggle-icon">▾</span>
+            </div>
             <div id="leaderboard-content" class="panel-body">
-                <div id="top-players">Initialisation...</div>
+                <div class="leader-tabs">
+                    <button class="l-tab active">GLOBAL</button>
+                    <button class="l-tab">JOURNALIER</button>
+                </div>
+                <div id="top-players" class="leader-list scroll-styled">
+                    </div>
                 <div class="leader-footer">
-                    <div id="my-rank">Votre Rang: #--</div>
+                    <div id="my-rank" class="my-rank-card">
+                        <span class="rank-pos">#--</span>
+                        <span class="rank-name">Vous</span>
+                        <span class="rank-points">0 PX</span>
+                    </div>
                 </div>
             </div>
         </div>
 
         <div class="menu-container" id="arsenalMenu" style="display:none;">
             <div class="header-card">
-                <button class="close-btn" onclick="toggleArsenal(false)">×</button>
-                <div class="profile-summary">
-                    <div class="px-display">
-                        <span id="px-total" class="px-val">0</span>
-                        <span class="px-label">CRÉDITS PX</span>
+                <button class="close-btn" onclick="toggleArsenal(false)">✕</button>
+                
+                <div class="user-profile-v2">
+                    <div class="avatar-shield">
+                        <div id="user-initial">?</div>
+                        <div class="shield-ring"></div>
                     </div>
-                    <div class="score-display">
-                        PUISSANCE : <span id="score-total" class="score-val">0</span>
+                    <div class="profile-info">
+                        <h2 id="display-username">GUERRIER</h2>
+                        <div class="grade-container">
+                            <span class="grade-label">GRADE:</span>
+                            <span id="grade-val" class="neon-text">RECRUE</span>
+                        </div>
                     </div>
                 </div>
-                <p id="display-username"></p>
-                <div class="rank-badge">GRADE: ÉLITE OMEGA</div>
+
+                <div class="currency-hud">
+                    <div class="currency-item">
+                        <span class="c-label">CRÉDITS PX</span>
+                        <div class="c-val-group">
+                            <span id="px-total" class="c-val">0</span>
+                            <span class="c-icon">💎</span>
+                        </div>
+                    </div>
+                    <div class="currency-item">
+                        <span class="c-label">PUISSANCE DE FEU</span>
+                        <div class="c-val-group">
+                            <span id="score-total" class="c-val">0</span>
+                            <span class="c-icon">🔥</span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="tabs">
-                <button id="btn-tab-armes" class="tab-btn active" onclick="showTab('tab-armes')">ARMES</button>
-                <button id="btn-tab-social" class="tab-btn" onclick="showTab('tab-social')">SOCIAL</button>
-                <button id="btn-tab-stats" class="tab-btn" onclick="showTab('tab-stats')">STATS</button>
+                <button id="btn-tab-armes" class="tab-btn active" onclick="showTab('tab-armes')">
+                    <span class="t-icon">⚔️</span> ARMES
+                </button>
+                <button id="btn-tab-quests" class="tab-btn" onclick="showTab('tab-quests')">
+                    <span class="t-icon">📜</span> QUÊTES
+                </button>
+                <button id="btn-tab-social" class="tab-btn" onclick="showTab('tab-social')">
+                    <span class="t-icon">🤝</span> SOCIAL
+                </button>
+                <button id="btn-tab-config" class="tab-btn" onclick="showTab('tab-config')">
+                    <span class="t-icon">⚙️</span> CONFIG
+                </button>
             </div>
 
             <div id="tab-armes" class="tab-pane active">
-                <div class="config-section">
-                    <div class="config-row">
-                        <label>COULEUR</label>
-                        <input type="color" id="pixelColor" value="#00f2ff">
-                    </div>
-                    <div class="config-row">
-                        <input type="text" id="creatorInput" placeholder="CODE CRÉATEUR">
-                        <button onclick="checkCreatorCode()">✓</button>
+                <div class="quick-config">
+                    <div class="color-picker-group">
+                        <label>COULEUR DU PIXEL</label>
+                        <div class="picker-container">
+                            <input type="color" id="pixelColor" value="#00f2ff">
+                            <span id="color-hex">#00f2ff</span>
+                        </div>
                     </div>
                 </div>
                 
-                <h2 class="category-title">⚔️ ARSENAL OFFENSIF</h2>
-                <div class="items-list">
-                    <div class="item active" onclick="selectItem(this, 'BASE', 1)">
-                        <div class="item-name">📍 PIXEL</div> <div class="price">1 PX</div>
+                <h3 class="category-header">OFFENSIF <span class="count-tag">6</span></h3>
+                <div class="items-list scroll-styled">
+                    <div class="item unlocked active" onclick="selectItem(this, 'BASE', 1)">
+                        <div class="item-visual">📍</div>
+                        <div class="item-details">
+                            <div class="item-title">SIMPLE PIXEL</div>
+                            <div class="item-desc">Unité de base. Faible impact.</div>
+                        </div>
+                        <div class="item-cost">FREE</div>
                     </div>
-                    <div class="item" onclick="selectItem(this, 'LASER', 8)">
-                        <div class="item-name">⚡ LASER</div> <div class="price">8 PX</div>
+
+                    <div class="item unlocked" onclick="selectItem(this, 'LASER', 8)">
+                        <div class="item-visual">⚡</div>
+                        <div class="item-details">
+                            <div class="item-title">RAYON LASER</div>
+                            <div class="item-desc">Trace une ligne de 5 pixels.</div>
+                        </div>
+                        <div class="item-cost">8 PX</div>
                     </div>
-                    <div class="item blizzard" onclick="selectItem(this, 'SNOW', 100)">
-                        <div class="item-name">❄️ BLIZZARD</div> <div class="price">100 PX</div>
+
+                    <div class="item locked" id="weapon-zombie" onclick="checkUnlock('ZOMBIE', 500)">
+                        <div class="lock-overlay"><span>🔒 NIV. 5 REQUIS</span></div>
+                        <div class="item-visual">🧟</div>
+                        <div class="item-details">
+                            <div class="item-title">ZOMBIE VIRAL</div>
+                            <div class="item-desc">Se déplace et infecte le canvas.</div>
+                        </div>
+                        <div class="item-cost">500 PX</div>
                     </div>
-                    <div class="item zombie" onclick="selectItem(this, 'ZOMBIE', 500)">
-                        <div class="item-name">🧟 ZOMBIE</div> <div class="price">500 PX</div>
+
+                    <div class="item locked" id="weapon-nuke" onclick="checkUnlock('NUKE', 1500)">
+                        <div class="lock-overlay"><span>🔒 QUÊTE "ATOMIQUE"</span></div>
+                        <div class="item-visual">☢️</div>
+                        <div class="item-details">
+                            <div class="item-title">GIGA-NUKE V2</div>
+                            <div class="item-desc">Destruction massive par onde.</div>
+                        </div>
+                        <div class="item-cost">1.5K</div>
                     </div>
-                    <div class="item nuke" onclick="selectItem(this, 'NUKE', 1500)">
-                        <div class="item-name">☢️ GIGA-NUKE</div> <div class="price">1.5K</div>
-                    </div>
-                    <div class="item blackhole" onclick="selectItem(this, 'BLACKHOLE', 3000)">
-                        <div class="item-name">🕳️ TROU NOIR</div> <div class="price">3K</div>
+
+                    <div class="item locked" id="weapon-blackhole" onclick="checkUnlock('BLACKHOLE', 3000)">
+                        <div class="lock-overlay"><span>🔒 GRADE ÉLITE</span></div>
+                        <div class="item-visual">🕳️</div>
+                        <div class="item-details">
+                            <div class="item-title">SINGULARITÉ</div>
+                            <div class="item-desc">Aspire tous les pixels proches.</div>
+                        </div>
+                        <div class="item-cost">3K</div>
                     </div>
                 </div>
 
-                <h2 class="category-title bots">🤖 UNITÉS AUTOMATIQUES</h2>
+                <h3 class="category-header">BOTS AUTOMATIQUES <span class="count-tag">3</span></h3>
                 <div class="items-list">
-                    <div class="item bot-v1" onclick="selectItem(this, 'BBOT_V1', 150)">
-                        <div class="item-name">🤖 B-BOT V1</div> <div class="price">150 PX</div>
+                    <div class="item bot" onclick="selectItem(this, 'BBOT_V1', 150)">
+                        <div class="item-visual">🤖</div>
+                        <div class="item-name">B-BOT V1</div>
+                        <div class="item-cost">150 PX</div>
                     </div>
-                    <div class="item bot-v2" onclick="selectItem(this, 'BBOT_V2', 600)">
-                        <div class="item-name">⚙️ B-BOT V2</div> <div class="price">600 PX</div>
+                    <div class="item bot elite" onclick="selectItem(this, 'BBOT_V5', 12000)">
+                        <div class="item-visual">👑</div>
+                        <div class="item-name">B-BOT OMEGA</div>
+                        <div class="item-cost">12K</div>
                     </div>
-                    <div class="item bot-v5" onclick="selectItem(this, 'BBOT_V5', 12000)">
-                        <div class="item-name">👑 B-BOT V5</div> <div class="price">12K</div>
+                </div>
+            </div>
+
+            <div id="tab-quests" class="tab-pane">
+                <div class="quest-summary">
+                    <h3>VOS MISSIONS</h3>
+                    <p>Complétez les défis pour débloquer l'arsenal secret.</p>
+                </div>
+                
+                <div class="quest-container">
+                    <div class="quest-card">
+                        <div class="quest-info">
+                            <span class="q-title">PREMIERS PAS</span>
+                            <span class="q-reward">+500 PX</span>
+                        </div>
+                        <p class="q-task">Poser 100 pixels sur le canvas.</p>
+                        <div class="q-progress-container">
+                            <div class="q-bar"><div class="q-fill" style="width: 45%;"></div></div>
+                            <span class="q-percent">45/100</span>
+                        </div>
+                    </div>
+
+                    <div class="quest-card locked">
+                        <div class="quest-info">
+                            <span class="q-title">ATOMIQUE</span>
+                            <span class="q-reward">🔓 NUKE</span>
+                        </div>
+                        <p class="q-task">Atteindre 10,000 points de puissance.</p>
+                        <div class="q-progress-container">
+                            <div class="q-bar"><div class="q-fill" style="width: 10%;"></div></div>
+                            <span class="q-percent">1K/10K</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div id="tab-social" class="tab-pane">
-                <div class="social-card">
-                    <h3>🎁 TRANSFERT DE CRÉDITS</h3>
-                    <p class="hint">Partagez vos PX avec vos alliés.</p>
-                    <input type="text" id="gift-target" placeholder="Pseudo du destinataire">
-                    <button onclick="sendGift()" class="action-btn">ENVOYER 500 PX</button>
+                <div class="social-wrapper">
+                    <div class="social-card gift-section">
+                        <div class="card-icon">🎁</div>
+                        <h3>SYSTÈME DE TRANSFERT</h3>
+                        <p>Partagez votre fortune avec vos alliés de clan.</p>
+                        
+                        <div class="gift-inputs">
+                            <input type="text" id="gift-target" placeholder="Pseudo exact de l'ami">
+                            <div class="amount-selector">
+                                <button onclick="setGiftAmount(500)">500</button>
+                                <button onclick="setGiftAmount(1000)">1k</button>
+                                <button onclick="setGiftAmount(5000)">5k</button>
+                            </div>
+                            <button onclick="sendGift()" class="action-btn gold-btn">
+                                <span class="btn-text">OFFRIR LES PX</span>
+                            </button>
+                        </div>
+                        <p id="gift-status" class="status-msg"></p>
+                    </div>
+
+                    <div class="social-card">
+                        <h3>CODE CRÉATEUR</h3>
+                        <div class="creator-input-group">
+                            <input type="text" id="creatorInput" placeholder="ENTRER CODE">
+                            <button class="check-btn" onclick="checkCreatorCode()">VÉRIFIER</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div id="tab-stats" class="tab-pane">
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <span class="stat-label">Pixels Posés</span>
-                        <span id="stat-placed" class="stat-val">0</span>
+            <div id="tab-config" class="tab-pane">
+                <div class="config-grid">
+                    <div class="config-item">
+                        <label>STYLE DU NÉON (UI)</label>
+                        <p class="hint">Change la couleur de toute l'interface.</p>
+                        <div class="neon-presets">
+                            <button class="p-btn cyan" onclick="changeUITheme('#00f2ff')"></button>
+                            <button class="p-btn red" onclick="changeUITheme('#ff4444')"></button>
+                            <button class="p-btn green" onclick="changeUITheme('#00ff88')"></button>
+                            <button class="p-btn gold" onclick="changeUITheme('#ffcc00')"></button>
+                            <button class="p-btn purple" onclick="changeUITheme('#bc00ff')"></button>
+                        </div>
                     </div>
-                    <div class="stat-card">
-                        <span class="stat-label">PX Récoltés</span>
-                        <span id="stat-earned" class="stat-val">0</span>
+
+                    <div class="config-item">
+                        <label>QUALITÉ GRAPHIQUE</label>
+                        <select id="gfx-quality">
+                            <option value="ultra">ULTRA (VFX+)</option>
+                            <option value="med">STANDARD</option>
+                            <option value="low">PERFORMANCE (NO BLUR)</option>
+                        </select>
                     </div>
-                    <div class="stat-card">
-                        <span class="stat-label">Bots Actifs</span>
-                        <span id="stat-bots" class="stat-val">0</span>
+
+                    <div class="config-item">
+                        <button class="danger-btn" onclick="logout()">DÉCONNEXION DU SYSTÈME</button>
                     </div>
                 </div>
             </div>
@@ -178,12 +368,30 @@
         <div id="game-notif" class="notification-area"></div>
 
         <button id="openBtn" class="open-menu-btn" onclick="toggleArsenal(true)">
-            <span class="btn-icon">🛡️</span> ARSENAL
+            <div class="btn-content">
+                <span class="btn-icon">🛡️</span>
+                <span class="btn-text">ARSENAL OMEGA</span>
+            </div>
+            <div class="btn-glow"></div>
         </button>
+
+        <div class="hud-footer">
+            <div id="pos-display">X: 0 | Y: 0</div>
+            <div class="cooldown-container">
+                <div id="cd-timer">PRÊT</div>
+                <div class="cd-bar"><div id="cd-fill"></div></div>
+            </div>
+        </div>
     </div>
 
-    <div class="scanlines"></div>
-
     <script src="script.js"></script>
+
+    <script>
+        // Ce petit script gère l'affichage temps réel du Color Picker
+        document.getElementById('pixelColor').addEventListener('input', function(e) {
+            document.getElementById('color-hex').innerText = e.target.value.toUpperCase();
+        });
+    </script>
+
 </body>
 </html>
