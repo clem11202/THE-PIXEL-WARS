@@ -1,6 +1,6 @@
 // ============================================================
 // CYBER-INTERFACE OMEGA - JAVASCRIPT CORE (FULL MULTIPLAYER)
-// Version: 7.6.0 - Added Zoom & Scroll Support
+// Version: 17.0.0 - PERFORMANCE TITAN EDITION
 // ============================================================
 
 // --- 1. INITIALISATION FIREBASE ---
@@ -15,7 +15,6 @@ const firebaseConfig = {
   measurementId: "G-YGEG188XHL"
 };
 
-// Lancement de Firebase
 if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
 }
@@ -37,13 +36,11 @@ let statsEarned = 0;
 let statsBots = 0;
 let gameActive = false; 
 
-// Navigation
 let isDraggingMap = false;
 let startX, startY;
 let camX = 0, camY = 0;
 const arrowMoveSpeed = 50; 
 
-// Extensions
 let lastClickTime = 0;
 let comboCount = 0;
 let currentQuest = { id: 1, target: 50, current: 0, reward: 500, desc: "Poser 50 pixels" };
@@ -53,8 +50,7 @@ let activeParticles = [];
 const canvas = document.getElementById('canvas');
 const viewport = document.getElementById('viewport');
 
-// --- 3. ÉCOUTEURS MULTIJOUEUR (Pixels, Chat, Stats) ---
-
+// --- 3. ÉCOUTEURS MULTIJOUEUR ---
 pixelsRef.on('child_added', (snapshot) => {
     const data = snapshot.val();
     drawPixelLocally(data.x, data.y, data.color);
@@ -70,15 +66,12 @@ chatRef.limitToLast(20).on('child_added', (snap) => {
 statsRef.on('value', (snapshot) => {
     const lp = document.getElementById('top-players') || document.getElementById('leader-list');
     if(!lp) return;
-
     let players = [];
     snapshot.forEach(child => {
         let val = child.val();
         players.push({ n: child.key, s: val.score || 0, l: val.level || 1 });
     });
-
     players.sort((a, b) => b.s - a.s); 
-
     let html = "";
     players.slice(0, 15).forEach((p, i) => {
         let isMe = (p.n === pseudo) ? "color:#00f2ff; font-weight:bold; background:rgba(0,242,255,0.1);" : "";
@@ -103,7 +96,7 @@ function drawPixelLocally(x, y, color) {
     canvas.appendChild(p);
 }
 
-// --- 4. REVENU AUTOMATIQUE & EVENT ---
+// --- 4. REVENU AUTOMATIQUE ---
 setInterval(() => {
     if (gameActive) {
         px += 1;
@@ -126,7 +119,7 @@ function filterText(text) {
     return censored;
 }
 
-// --- 6. DÉPLACEMENT & ZOOM (MAJ ZOOM) ---
+// --- 6. DÉPLACEMENT & ZOOM ---
 function moveMap(direction) {
     if (!gameActive) return;
     if (direction === 'up') camY += arrowMoveSpeed;
@@ -136,9 +129,8 @@ function moveMap(direction) {
     applyMapTransform();
 }
 
-// Nouvelle fonction pour zoomer/dézoomer via boutons
 function changeZoom(delta) {
-    zoomLevel = Math.min(Math.max(0.1, zoomLevel + delta), 3); // Limite entre 0.1x et 3x
+    zoomLevel = Math.min(Math.max(0.1, zoomLevel + delta), 3);
     applyMapTransform();
 }
 
@@ -148,12 +140,10 @@ function resetView() {
 }
 
 function applyMapTransform() {
-    // On combine le déplacement et le zoom dans le transform CSS
     canvas.style.transform = `translate(${camX}px, ${camY}px) scale(${zoomLevel})`;
     canvas.style.transformOrigin = "center center";
 }
 
-// Écouteur de molette de souris pour le zoom
 viewport.addEventListener('wheel', (e) => {
     if (!gameActive) return;
     e.preventDefault();
@@ -161,7 +151,6 @@ viewport.addEventListener('wheel', (e) => {
     changeZoom(delta);
 }, { passive: false });
 
-// Drag souris
 viewport.addEventListener('mousedown', (e) => {
     if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
         isDraggingMap = true;
@@ -212,11 +201,8 @@ function spawnBBot(x, y, type) {
 canvas.onclick = (e) => {
     if (!gameActive || isDraggingMap) return; 
     const rect = canvas.getBoundingClientRect();
-    
-    // Calcul de la position tenant compte du ZOOM
     const x = (e.clientX - rect.left) / zoomLevel;
     const y = (e.clientY - rect.top) / zoomLevel;
-    
     const col = document.getElementById('pixelColor')?.value || "#00f2ff";
 
     if(px < prix) { shakeElement(document.getElementById('px-total')); return; } 
@@ -239,7 +225,6 @@ canvas.onclick = (e) => {
 function createPixel(x, y, color) {
     const gridX = Math.floor(x/25)*25;
     const gridY = Math.floor(y/25)*25;
-    
     pixelsRef.push({
         x: gridX,
         y: gridY,
@@ -247,7 +232,6 @@ function createPixel(x, y, color) {
         user: pseudo,
         time: firebase.database.ServerValue.TIMESTAMP
     });
-    
     statsPlaced++;
 }
 
@@ -284,13 +268,11 @@ function spawnZombie(x, y) {
     }, 400);
 }
 
-// --- 10. CHAT & UI (MULTI-SYNC) ---
-
+// --- 10. CHAT & UI ---
 function updateLeaderboard() {
     if(!pseudo || !gameActive) return;
     statsRef.child(pseudo).set({
-        score: score,
-        level: level,
+        score: score, level: level,
         lastSeen: firebase.database.ServerValue.TIMESTAMP
     });
 }
@@ -298,13 +280,11 @@ function updateLeaderboard() {
 function sendMessage() {
     const input = document.getElementById('chatInput');
     if(!input || input.value.trim() === "" || !gameActive) return;
-    
     chatRef.push({
         u: pseudo || "Anonyme",
         m: filterText(input.value.trim()),
         t: firebase.database.ServerValue.TIMESTAMP
     });
-    
     input.value = "";
 }
 
@@ -325,9 +305,7 @@ function login() {
     document.getElementById('auth-overlay').style.display = 'none';
     document.getElementById('game-ui').style.display = 'block';
     document.getElementById('display-username').innerText = "@" + pseudo;
-    
     addChatMessage("SYSTEM", `Connexion établie. Bienvenue ${pseudo} !`);
-    
     updateUI();
     updateLeaderboard();
 }
@@ -337,7 +315,6 @@ function updateUI() {
     const scEl = document.getElementById('score-total');
     if(pxEl) pxEl.innerText = Math.floor(px).toLocaleString();
     if(scEl) scEl.innerText = Math.floor(score).toLocaleString();
-    
     if(document.getElementById('stat-placed')) document.getElementById('stat-placed').innerText = statsPlaced;
     if(document.getElementById('stat-earned')) document.getElementById('stat-earned').innerText = Math.floor(statsEarned);
     if(document.getElementById('stat-bots')) document.getElementById('stat-bots').innerText = statsBots;
@@ -407,3 +384,78 @@ function initGame() {
 }
 
 window.onload = initGame;
+
+// --- 11. EXTENSIONS DE CONFORT TITAN ---
+canvas.addEventListener('mousedown', () => {
+    let now = Date.now();
+    if (now - lastClickTime < 300) {
+        comboCount++;
+        if (comboCount > 5) {
+            createParticleEffect(window.innerWidth/2, 100, "var(--accent)");
+            px += (comboCount * 0.1); 
+        }
+    } else {
+        comboCount = 0;
+    }
+    lastClickTime = now;
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    const savedPseudo = localStorage.getItem('omega_pseudo');
+    if (savedPseudo) {
+        const input = document.getElementById('reg-pseudo');
+        if(input) input.value = savedPseudo;
+    }
+});
+
+const originalLogin = login;
+login = function() {
+    originalLogin();
+    if (pseudo) localStorage.setItem('omega_pseudo', pseudo);
+};
+
+// --- 12. GESTION DES ERREURS FIREBASE ---
+db.ref(".info/connected").on("value", (snap) => {
+    if (snap.val() === true) {
+        console.log("▲ Système Omega : Liaison Satellite Établie");
+    } else {
+        console.warn("▼ Système Omega : Liaison Perdue...");
+    }
+});
+
+// ============================================================
+// ADDON TITAN PERFORMANCE - (ANTI-LAG AUTO)
+// ============================================================
+const fastCanvas = document.createElement('canvas');
+fastCanvas.id = "fastRenderLayer";
+fastCanvas.width = 5000;
+fastCanvas.height = 5000;
+fastCanvas.style.position = "absolute";
+fastCanvas.style.top = "0";
+fastCanvas.style.left = "0";
+fastCanvas.style.pointerEvents = "none";
+document.getElementById('canvas').appendChild(fastCanvas);
+
+const fCtx = fastCanvas.getContext('2d', { alpha: true });
+
+const originalDrawPixel = drawPixelLocally;
+drawPixelLocally = function(x, y, color) {
+    fCtx.fillStyle = color;
+    fCtx.fillRect(x, y, 25, 25);
+    
+    // On ne crée des DIVs que si le jeu est fluide (moins de 400 pixels à l'écran)
+    if (document.querySelectorAll('.pixel').length < 400) { 
+        originalDrawPixel(x, y, color);
+    }
+};
+
+setInterval(() => {
+    if(gameActive) {
+        const legacyPixels = document.querySelectorAll('.pixel:not(.bbot-unit)');
+        if(legacyPixels.length > 200) {
+            for(let i=0; i < 50; i++) {
+                if(legacyPixels[i]) legacyPixels[i].remove();
+            }
+        }
+    }
+}, 2000);
