@@ -1,6 +1,6 @@
 // ============================================================
 // CYBER-INTERFACE OMEGA - JAVASCRIPT CORE (FULL MULTIPLAYER)
-// Version: 7.5.0 - Leaderboard & Chat Sync Fixed
+// Version: 7.6.0 - Added Zoom & Scroll Support
 // ============================================================
 
 // --- 1. INITIALISATION FIREBASE ---
@@ -21,8 +21,8 @@ if (!firebase.apps.length) {
 }
 const db = firebase.database();
 const pixelsRef = db.ref('pixels');
-const chatRef = db.ref('globalChat');    // Ajouté pour le multi-chat
-const statsRef = db.ref('leaderboard');  // Ajouté pour le classement
+const chatRef = db.ref('globalChat');    
+const statsRef = db.ref('leaderboard');  
 
 // --- 2. CONFIGURATION & VARIABLES GLOBALES ---
 let px = 100; 
@@ -31,7 +31,7 @@ let arme = 'BASE';
 let prix = 1; 
 let pseudo = ""; 
 let zoomLevel = 1;
-let level = 1; // Ajouté pour le classement
+let level = 1; 
 let statsPlaced = 0;
 let statsEarned = 0;
 let statsBots = 0;
@@ -55,21 +55,18 @@ const viewport = document.getElementById('viewport');
 
 // --- 3. ÉCOUTEURS MULTIJOUEUR (Pixels, Chat, Stats) ---
 
-// Synchronisation des Pixels
 pixelsRef.on('child_added', (snapshot) => {
     const data = snapshot.val();
     drawPixelLocally(data.x, data.y, data.color);
 });
 
-// Synchronisation du Chat Mondial (NOUVEAU)
 chatRef.limitToLast(20).on('child_added', (snap) => {
     const data = snap.val();
     if (data.u && data.m) {
-        addChatMessage(data.u, data.m, true); // true = vient de Firebase
+        addChatMessage(data.u, data.m, true); 
     }
 });
 
-// Synchronisation du Classement (NOUVEAU)
 statsRef.on('value', (snapshot) => {
     const lp = document.getElementById('top-players') || document.getElementById('leader-list');
     if(!lp) return;
@@ -129,7 +126,7 @@ function filterText(text) {
     return censored;
 }
 
-// --- 6. DÉPLACEMENT & ZOOM ---
+// --- 6. DÉPLACEMENT & ZOOM (MAJ ZOOM) ---
 function moveMap(direction) {
     if (!gameActive) return;
     if (direction === 'up') camY += arrowMoveSpeed;
@@ -139,16 +136,30 @@ function moveMap(direction) {
     applyMapTransform();
 }
 
+// Nouvelle fonction pour zoomer/dézoomer via boutons
+function changeZoom(delta) {
+    zoomLevel = Math.min(Math.max(0.1, zoomLevel + delta), 3); // Limite entre 0.1x et 3x
+    applyMapTransform();
+}
+
 function resetView() {
     camX = 0; camY = 0; zoomLevel = 1;
-    canvas.style.transform = `scale(${zoomLevel})`;
     applyMapTransform();
 }
 
 function applyMapTransform() {
-    canvas.style.left = camX + 'px';
-    canvas.style.top = camY + 'px';
+    // On combine le déplacement et le zoom dans le transform CSS
+    canvas.style.transform = `translate(${camX}px, ${camY}px) scale(${zoomLevel})`;
+    canvas.style.transformOrigin = "center center";
 }
+
+// Écouteur de molette de souris pour le zoom
+viewport.addEventListener('wheel', (e) => {
+    if (!gameActive) return;
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    changeZoom(delta);
+}, { passive: false });
 
 // Drag souris
 viewport.addEventListener('mousedown', (e) => {
@@ -201,8 +212,11 @@ function spawnBBot(x, y, type) {
 canvas.onclick = (e) => {
     if (!gameActive || isDraggingMap) return; 
     const rect = canvas.getBoundingClientRect();
+    
+    // Calcul de la position tenant compte du ZOOM
     const x = (e.clientX - rect.left) / zoomLevel;
     const y = (e.clientY - rect.top) / zoomLevel;
+    
     const col = document.getElementById('pixelColor')?.value || "#00f2ff";
 
     if(px < prix) { shakeElement(document.getElementById('px-total')); return; } 
@@ -219,14 +233,13 @@ canvas.onclick = (e) => {
     currentQuest.current++;
     checkQuestStatus();
     updateUI();
-    updateLeaderboard(); // Mise à jour Firebase du score
+    updateLeaderboard(); 
 };
 
 function createPixel(x, y, color) {
     const gridX = Math.floor(x/25)*25;
     const gridY = Math.floor(y/25)*25;
     
-    // ENVOI À FIREBASE
     pixelsRef.push({
         x: gridX,
         y: gridY,
@@ -286,7 +299,6 @@ function sendMessage() {
     const input = document.getElementById('chatInput');
     if(!input || input.value.trim() === "" || !gameActive) return;
     
-    // ENVOI MULTIJOUEUR
     chatRef.push({
         u: pseudo || "Anonyme",
         m: filterText(input.value.trim()),
@@ -308,13 +320,12 @@ function addChatMessage(user, text, isFromFirebase = false) {
 function login() {
     let p = document.getElementById('reg-pseudo').value;
     if(p.length < 3) return alert("Pseudo trop court !");
-    pseudo = p.replace(/[^a-zA-Z0-9]/g, '_'); // Sécurité pseudo
+    pseudo = p.replace(/[^a-zA-Z0-9]/g, '_'); 
     gameActive = true;
     document.getElementById('auth-overlay').style.display = 'none';
     document.getElementById('game-ui').style.display = 'block';
     document.getElementById('display-username').innerText = "@" + pseudo;
     
-    // Notification système locale
     addChatMessage("SYSTEM", `Connexion établie. Bienvenue ${pseudo} !`);
     
     updateUI();
