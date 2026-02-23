@@ -1,25 +1,25 @@
 // ============================================================
-// CYBER-INTERFACE OMEGA - JAVASCRIPT CORE
-// Version: 6.0.0 (MULTIPLAYER REALTIME EDITION)
+// CYBER-INTERFACE OMEGA - JAVASCRIPT CORE (FULL MULTIPLAYER)
 // ============================================================
 
-// --- 0. CONFIGURATION FIREBASE (À REMPLIR) ---
+// --- 1. INITIALISATION FIREBASE ---
 const firebaseConfig = {
-  apiKey: "INDIQUE_ICI_TON_API_KEY",
+  apiKey: "AIzaSyCpEPUL6u1DHcU8w10UxoN6NthYX_VKSSM",
   authDomain: "pixel-omega-game.firebaseapp.com",
   databaseURL: "https://pixel-omega-game-default-rtdb.firebaseio.com",
   projectId: "pixel-omega-game",
-  storageBucket: "pixel-omega-game.appspot.com",
-  messagingSenderId: "TON_SENDER_ID",
-  appId: "TON_APP_ID"
+  storageBucket: "pixel-omega-game.firebasestorage.app",
+  messagingSenderId: "259832658085",
+  appId: "1:259832658085:web:e8d3ab59f3bcc06caf754c",
+  measurementId: "G-YGEG188XHL"
 };
 
-// Initialisation de la connexion mondiale
+// Lancement de Firebase
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const pixelsRef = db.ref('pixels');
 
-// --- 1. CONFIGURATION & VARIABLES GLOBALES ---
+// --- 2. CONFIGURATION & VARIABLES GLOBALES ---
 let px = 100; 
 let score = 0; 
 let arme = 'BASE'; 
@@ -31,78 +31,66 @@ let statsEarned = 0;
 let statsBots = 0;
 let gameActive = false; 
 
-// Variables pour le déplacement (Pan)
+// Navigation
 let isDraggingMap = false;
 let startX, startY;
 let camX = 0, camY = 0;
 const arrowMoveSpeed = 50; 
 
-// --- NOUVELLES VARIABLES EXTENSION ---
+// Extensions
 let lastClickTime = 0;
 let comboCount = 0;
 let currentQuest = { id: 1, target: 50, current: 0, reward: 500, desc: "Poser 50 pixels" };
-let achievements = [];
 let weatherActive = "NEUTRAL";
 let activeParticles = [];
-let playerLevel = 1;
-let levelExp = 0;
-let expNeeded = 100;
 
-const GRID_SIZE = 25;
 const canvas = document.getElementById('canvas');
 const viewport = document.getElementById('viewport');
 
-// --- 2. SYSTÈME DE SAUVEGARDE & CHARGEMENT ---
-function saveGame() {
-    if (!gameActive) return;
-    const gameData = { px, score, statsPlaced, statsEarned, playerLevel, levelExp, pseudo };
-    localStorage.setItem('omega_save', JSON.stringify(gameData));
+// --- 3. ÉCOUTEUR MULTIJOUEUR (L'âme du jeu) ---
+// Quand quelqu'un (toi ou un autre) pose un pixel, il apparaît ici
+pixelsRef.on('child_added', (snapshot) => {
+    const data = snapshot.val();
+    drawPixelLocally(data.x, data.y, data.color);
+});
+
+function drawPixelLocally(x, y, color) {
+    const p = document.createElement('div');
+    p.className = 'pixel';
+    p.style.left = x + 'px';
+    p.style.top = y + 'px';
+    p.style.backgroundColor = color;
+    p.style.position = "absolute"; 
+    p.style.width = "25px"; 
+    p.style.height = "25px";
+    p.style.boxShadow = `0 0 5px ${color}`;
+    canvas.appendChild(p);
 }
 
-function loadGame() {
-    const saved = localStorage.getItem('omega_save');
-    if (saved) {
-        const data = JSON.parse(saved);
-        px = data.px || 100;
-        score = data.score || 0;
-        statsPlaced = data.statsPlaced || 0;
-        statsEarned = data.statsEarned || 0;
-        playerLevel = data.playerLevel || 1;
-        levelExp = data.levelExp || 0;
-        console.log("Données locales chargées.");
-    }
-}
-setInterval(saveGame, 30000);
-
-// --- 3. REVENU AUTOMATIQUE ---
+// --- 4. REVENU AUTOMATIQUE & EVENT ---
 setInterval(() => {
     if (gameActive) {
-        let passiveGain = 1;
-        if (weatherActive === "STORM") passiveGain *= 2;
-        px += passiveGain;
-        statsEarned += passiveGain;
+        px += 1;
+        statsEarned += 1;
         updateUI();
         checkEventTriggers();
     }
 }, 5000);
 
-// --- 4. FILTRE DE CHAT ---
-const BLACKLIST = ["merde", "putain", "con", "connard", "salope", "encule", "fdp", "pute", "fuck", "shit"];
-
+// --- 5. FILTRE CHAT ---
+const BLACKLIST = ["merde", "putain", "con", "connard", "salope", "encule", "fdp", "pute", "bite", "nique"];
 function filterText(text) {
-    let cleanText = text.toLowerCase();
+    let clean = text.toLowerCase();
     let censored = text;
     BLACKLIST.forEach(word => {
-        if (cleanText.includes(word)) {
-            let stars = "*".repeat(word.length);
-            let regex = new RegExp(word, "gi");
-            censored = censored.replace(regex, stars);
+        if (clean.includes(word)) {
+            censored = censored.replace(new RegExp(word, 'gi'), "*".repeat(word.length));
         }
     });
     return censored;
 }
 
-// --- 5. DÉPLACEMENT & ZOOM ---
+// --- 6. DÉPLACEMENT & ZOOM ---
 function moveMap(direction) {
     if (!gameActive) return;
     if (direction === 'up') camY += arrowMoveSpeed;
@@ -112,20 +100,18 @@ function moveMap(direction) {
     applyMapTransform();
 }
 
+function resetView() {
+    camX = 0; camY = 0; zoomLevel = 1;
+    canvas.style.transform = `scale(${zoomLevel})`;
+    applyMapTransform();
+}
+
 function applyMapTransform() {
-    if (!canvas) return;
     canvas.style.left = camX + 'px';
     canvas.style.top = camY + 'px';
 }
 
-window.addEventListener('keydown', (e) => {
-    if (document.activeElement.tagName === 'INPUT') return; 
-    if (e.key === "ArrowUp" || e.key === "z") moveMap('up');
-    if (e.key === "ArrowDown" || e.key === "s") moveMap('down');
-    if (e.key === "ArrowLeft" || e.key === "q") moveMap('left');
-    if (e.key === "ArrowRight" || e.key === "d") moveMap('right');
-});
-
+// Drag souris
 viewport.addEventListener('mousedown', (e) => {
     if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
         isDraggingMap = true;
@@ -134,24 +120,45 @@ viewport.addEventListener('mousedown', (e) => {
         viewport.style.cursor = "grabbing";
     }
 });
-
 window.addEventListener('mousemove', (e) => {
     if (!isDraggingMap) return;
     camX = e.clientX - startX;
     camY = e.clientY - startY;
     applyMapTransform();
 });
-
-window.addEventListener('mouseup', () => { isDraggingMap = false; viewport.style.cursor = "crosshair"; });
-
-// --- 6. SYSTÈME MULTIJOUEUR (L'ÉCOUTEUR) ---
-// On écoute Firebase : si quelqu'un d'autre pose un pixel, on le dessine !
-pixelsRef.on('child_added', (snapshot) => {
-    const data = snapshot.val();
-    drawPixelOnCanvas(data.x, data.y, data.color);
+window.addEventListener('mouseup', () => {
+    isDraggingMap = false;
+    viewport.style.cursor = "crosshair";
 });
 
-// --- 7. MOTEUR DE TIR ---
+// --- 7. GESTION DES B-BOTS ---
+function spawnBBot(x, y, type) {
+    const bot = document.createElement('div');
+    bot.className = 'pixel bbot-unit';
+    const gridX = Math.floor(x/25)*25;
+    const gridY = Math.floor(y/25)*25;
+    bot.style.left = gridX + 'px'; bot.style.top = gridY + 'px';
+    bot.style.fontSize = "30px"; bot.style.position = "absolute"; bot.style.zIndex = "2000";
+    
+    let power = 1; let speed = 3000;
+    if(type === 'BBOT_V1') { bot.innerHTML = '🤖'; power = 1; speed = 3000; }
+    if(type === 'BBOT_V2') { bot.innerHTML = '⚙️'; power = 5; speed = 2500; }
+    if(type === 'BBOT_V5') { bot.innerHTML = '👑'; power = 200; speed = 1000; }
+
+    canvas.appendChild(bot);
+    statsBots++;
+
+    let life = 50; 
+    let income = setInterval(() => {
+        if(!gameActive) { clearInterval(income); bot.remove(); return; }
+        px += power; statsEarned += power;
+        updateUI();
+        createParticleEffect(parseInt(bot.style.left), parseInt(bot.style.top), '#00f2ff');
+        if(--life <= 0) { clearInterval(income); bot.remove(); statsBots--; updateUI(); }
+    }, speed);
+}
+
+// --- 8. MOTEUR DE TIR (CLICK) ---
 canvas.onclick = (e) => {
     if (!gameActive || isDraggingMap) return; 
     const rect = canvas.getBoundingClientRect();
@@ -161,14 +168,10 @@ canvas.onclick = (e) => {
 
     if(px < prix) { shakeElement(document.getElementById('px-total')); return; } 
 
-    let now = Date.now();
-    if(now - lastClickTime < 500) comboCount++; else comboCount = 0;
-    lastClickTime = now;
-
-    // Dispatch des armes
     if(arme === 'BASE') createPixel(x, y, col);
-    else if(arme === 'LASER') for(let i=0; i<15; i++) createPixel(x+(i*GRID_SIZE), y, col);
-    else if(arme === 'SNOW') for(let i=0; i<40; i++) setTimeout(() => createPixel(x+(Math.random()*200-100), y+(Math.random()*200-100), '#fff'), i*5);
+    else if(arme === 'LASER') for(let i=0; i<15; i++) createPixel(x+(i*25), y, col);
+    else if(arme === 'SNOW') for(let i=0; i<80; i++) setTimeout(() => createPixel(x+(Math.random()*400-200), y+(Math.random()*400-200), '#fff'), i*2);
+    else if(arme === 'ZOMBIE') spawnZombie(x, y);
     else if(arme === 'NUKE') triggerNuke(x, y, col);
     else if(arme === 'BLACKHOLE') triggerBlackHole(x, y);
     else if(arme.startsWith('BBOT')) spawnBBot(x, y, arme);
@@ -176,53 +179,31 @@ canvas.onclick = (e) => {
     px -= prix; score += prix;
     currentQuest.current++;
     checkQuestStatus();
-    gainExp(1);
     updateUI();
 };
 
-// --- 8. FONCTIONS PIXELS ---
 function createPixel(x, y, color) {
-    const gridX = Math.floor(x/GRID_SIZE)*GRID_SIZE;
-    const gridY = Math.floor(y/GRID_SIZE)*GRID_SIZE;
-    const pixelId = gridX + "_" + gridY;
-
-    // ENVOI À FIREBASE (C'est ça qui rend le jeu multijoueur)
-    pixelsRef.child(pixelId).set({
+    const gridX = Math.floor(x/25)*25;
+    const gridY = Math.floor(y/25)*25;
+    
+    // ENVOI À FIREBASE
+    pixelsRef.push({
         x: gridX,
         y: gridY,
         color: color,
-        owner: pseudo
+        user: pseudo,
+        time: Date.now()
     });
     
     statsPlaced++;
 }
 
-function drawPixelOnCanvas(x, y, color) {
-    // Supprime l'ancien pixel s'il existe à cette position exacte
-    const existing = document.getElementById("p_" + x + "_" + y);
-    if(existing) existing.remove();
-
-    const p = document.createElement('div');
-    p.id = "p_" + x + "_" + y;
-    p.className = 'pixel';
-    p.style.left = x + 'px';
-    p.style.top = y + 'px';
-    p.style.backgroundColor = color;
-    p.style.position = "absolute"; 
-    p.style.width = GRID_SIZE + "px"; 
-    p.style.height = GRID_SIZE + "px";
-    p.style.boxShadow = `0 0 5px ${color}`;
-    canvas.appendChild(p);
-}
-
 // --- 9. EFFETS SPÉCIAUX ---
 function triggerNuke(x, y, color) {
-    createParticleEffect(x, y, color);
-    const radius = 8;
-    for(let i=-radius; i<=radius; i++) {
-        for(let j=-radius; j<=radius; j++) {
-            if(Math.sqrt(i*i + j*j) <= radius) {
-                setTimeout(() => createPixel(x+(i*GRID_SIZE), y+(j*GRID_SIZE), color), Math.random()*400);
+    for(let i=-5; i<=5; i++) {
+        for(let j=-5; j<=5; j++) {
+            if(Math.sqrt(i*i + j*j) <= 5) {
+                setTimeout(() => createPixel(x+(i*25), y+(j*25), color), Math.random()*500);
             }
         }
     }
@@ -230,27 +211,27 @@ function triggerNuke(x, y, color) {
 
 function triggerBlackHole(x, y) {
     const bh = document.createElement('div');
-    bh.style.cssText = `position:absolute; left:${x}px; top:${y}px; width:150px; height:150px; background:radial-gradient(circle, #000, transparent); border-radius:50%; z-index:5000; transform:translate(-50%,-50%);`;
+    bh.className = 'blackhole-effect';
+    bh.style.left = x + 'px'; bh.style.top = y + 'px';
     canvas.appendChild(bh);
     setTimeout(() => bh.remove(), 3000);
 }
 
-function spawnBBot(x, y, type) {
-    const bot = document.createElement('div');
-    bot.className = 'pixel bbot-unit';
-    bot.style.left = Math.floor(x/GRID_SIZE)*GRID_SIZE + 'px';
-    bot.style.top = Math.floor(y/GRID_SIZE)*GRID_SIZE + 'px';
-    bot.innerHTML = (type === 'BBOT_V5') ? '👑' : '🤖';
-    canvas.appendChild(bot);
-    statsBots++;
-    let count = 0;
-    let loop = setInterval(() => {
-        px += 5; updateUI();
-        if(++count > 20) { clearInterval(loop); bot.remove(); statsBots--; }
-    }, 2000);
+function spawnZombie(x, y) {
+    const z = document.createElement('div');
+    z.innerHTML = '🧟'; z.style.cssText = `position:absolute; left:${x}px; top:${y}px; font-size:40px; z-index:3000;`;
+    canvas.appendChild(z);
+    let s = 20;
+    let mv = setInterval(() => {
+        let nx = parseInt(z.style.left) + (Math.random()*60-30);
+        let ny = parseInt(z.style.top) + (Math.random()*60-30);
+        z.style.left = nx+'px'; z.style.top = ny+'px';
+        createPixel(nx, ny, '#32cd32');
+        if(--s <= 0) { clearInterval(mv); z.remove(); }
+    }, 400);
 }
 
-// --- 10. SOCIAL & CHAT ---
+// --- 10. CHAT & UI ---
 function sendMessage() {
     const input = document.getElementById('chatInput');
     if(!input || input.value.trim() === "") return;
@@ -262,70 +243,61 @@ function addChatMessage(user, text) {
     const box = document.getElementById('chat-box');
     if(!box) return;
     const div = document.createElement('div');
-    div.innerHTML = `<span style="color:#00f2ff;">${user}:</span> ${text}`;
+    div.innerHTML = `<span style="color:#00f2ff; font-weight:bold;">${user}:</span> ${text}`;
     box.appendChild(div);
     box.scrollTop = box.scrollHeight;
 }
 
-// --- 11. PROGRESSION ---
-function gainExp(amount) {
-    levelExp += amount;
-    if(levelExp >= expNeeded) {
-        levelExp = 0; playerLevel++;
-        expNeeded = Math.floor(expNeeded * 1.3);
-        addChatMessage("SYSTEM", "LEVEL UP ! Niveau " + playerLevel);
-    }
-}
-
-function checkQuestStatus() {
-    if(currentQuest.current >= currentQuest.target) {
-        px += currentQuest.reward;
-        addChatMessage("QUÊTE", "Terminée ! +" + currentQuest.reward + " PX");
-        currentQuest.target *= 2; currentQuest.current = 0;
-    }
-}
-
-function checkEventTriggers() {
-    if(Math.random() < 0.02) {
-        weatherActive = "STORM";
-        addChatMessage("ALERTE", "Tempête solaire ! Gains x2 !");
-        setTimeout(() => weatherActive = "NEUTRAL", 10000);
-    }
-}
-
-// --- 12. UI & LOGIN ---
 function login() {
-    let p = document.getElementById('reg-pseudo')?.value || "Soldat";
+    let p = document.getElementById('reg-pseudo').value;
     if(p.length < 3) return alert("Pseudo trop court !");
     pseudo = p; gameActive = true;
     document.getElementById('auth-overlay').style.display = 'none';
     document.getElementById('game-ui').style.display = 'block';
     document.getElementById('display-username').innerText = "@" + pseudo;
-    addChatMessage("SYSTEM", "Bienvenue dans OMEGA, " + pseudo);
+    addChatMessage("SYSTEM", `Bienvenue ${pseudo} !`);
+    updateUI();
 }
 
 function updateUI() {
     document.getElementById('px-total').innerText = Math.floor(px).toLocaleString();
     document.getElementById('score-total').innerText = Math.floor(score).toLocaleString();
-    document.getElementById('stat-level').innerText = playerLevel;
     document.getElementById('stat-placed').innerText = statsPlaced;
-    const bar = document.getElementById('exp-progress');
-    if(bar) bar.style.width = (levelExp/expNeeded*100) + "%";
+    document.getElementById('stat-earned').innerText = Math.floor(statsEarned);
+    document.getElementById('stat-bots').innerText = statsBots;
 }
 
 function selectItem(el, a, p) {
     document.querySelectorAll('.item').forEach(i => i.classList.remove('active'));
-    el.classList.add('active'); arme = a; prix = p;
+    el.classList.add('active'); 
+    arme = a; prix = p;
 }
 
-function createParticleEffect(x, y, color) {
-    for(let i=0; i<5; i++) {
-        const part = document.createElement('div');
-        part.style.cssText = `position:absolute; left:${x}px; top:${y}px; width:4px; height:4px; background:${color}; border-radius:50%; pointer-events:none;`;
-        canvas.appendChild(part);
-        setTimeout(() => part.remove(), 1000);
+function showTab(t) {
+    document.querySelectorAll('.tab-pane').forEach(e => e.style.display = 'none');
+    document.querySelectorAll('.tab-btn').forEach(e => e.classList.remove('active'));
+    document.getElementById(t).style.display = 'flex';
+    document.getElementById('btn-' + t).classList.add('active');
+}
+
+function toggleArsenal(s) {
+    document.getElementById('arsenalMenu').style.display = s ? 'flex' : 'none';
+}
+
+function togglePanel(id) {
+    const body = document.querySelector(`#${id} .panel-body`);
+    body.style.display = (body.style.display === 'none') ? 'block' : 'none';
+}
+
+function checkQuestStatus() {
+    if(currentQuest.current >= currentQuest.target) {
+        px += currentQuest.reward;
+        addChatMessage("SYSTEM", `Quête finie : +${currentQuest.reward} PX`);
+        currentQuest.target *= 2; currentQuest.current = 0;
     }
 }
+
+function checkEventTriggers() {}
 
 function shakeElement(el) {
     if(!el) return;
@@ -333,19 +305,24 @@ function shakeElement(el) {
     setTimeout(() => el.style.color = "", 500);
 }
 
-function toggleArsenal(s) {
-    document.getElementById('arsenalMenu').style.display = s ? 'flex' : 'none';
-    document.getElementById('openBtn').style.display = s ? 'none' : 'block';
+function createParticleEffect(x, y, color) {
+    const p = document.createElement('div');
+    p.style.cssText = `position:absolute; left:${x}px; top:${y}px; width:4px; height:4px; background:${color}; pointer-events:none;`;
+    canvas.appendChild(p);
+    setTimeout(() => p.remove(), 1000);
 }
 
 function checkCreatorCode() {
     if(document.getElementById('creatorInput').value === "C26062012s!") {
-        px += 1000000; updateUI(); alert("CODE ALPHA ACTIVÉ !");
+        px += 1000000; updateUI(); alert("CODE CRÉATEUR ACTIVÉ !");
     }
 }
 
-window.onload = () => { loadGame(); updateUI(); };
+function initGame() {
+    updateUI();
+    document.getElementById('chatInput')?.addEventListener('keypress', (e) => {
+        if(e.key === 'Enter') sendMessage();
+    });
+}
 
-// ============================================================
-// FIN DU CODE MULTIJOUEUR OMEGA - 500+ LIGNES
-// ============================================================
+window.onload = initGame;
