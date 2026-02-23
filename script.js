@@ -1,5 +1,6 @@
 // ============================================================
 // CYBER-INTERFACE OMEGA - JAVASCRIPT CORE (FULL MULTIPLAYER)
+// Version: 7.5.0 - Leaderboard & Chat Sync Fixed
 // ============================================================
 
 // --- 1. INITIALISATION FIREBASE ---
@@ -15,9 +16,13 @@ const firebaseConfig = {
 };
 
 // Lancement de Firebase
-firebase.initializeApp(firebaseConfig);
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
 const db = firebase.database();
 const pixelsRef = db.ref('pixels');
+const chatRef = db.ref('globalChat');    // Ajouté pour le multi-chat
+const statsRef = db.ref('leaderboard');  // Ajouté pour le classement
 
 // --- 2. CONFIGURATION & VARIABLES GLOBALES ---
 let px = 100; 
@@ -26,6 +31,7 @@ let arme = 'BASE';
 let prix = 1; 
 let pseudo = ""; 
 let zoomLevel = 1;
+let level = 1; // Ajouté pour le classement
 let statsPlaced = 0;
 let statsEarned = 0;
 let statsBots = 0;
@@ -47,11 +53,44 @@ let activeParticles = [];
 const canvas = document.getElementById('canvas');
 const viewport = document.getElementById('viewport');
 
-// --- 3. ÉCOUTEUR MULTIJOUEUR (L'âme du jeu) ---
-// Quand quelqu'un (toi ou un autre) pose un pixel, il apparaît ici
+// --- 3. ÉCOUTEURS MULTIJOUEUR (Pixels, Chat, Stats) ---
+
+// Synchronisation des Pixels
 pixelsRef.on('child_added', (snapshot) => {
     const data = snapshot.val();
     drawPixelLocally(data.x, data.y, data.color);
+});
+
+// Synchronisation du Chat Mondial (NOUVEAU)
+chatRef.limitToLast(20).on('child_added', (snap) => {
+    const data = snap.val();
+    if (data.u && data.m) {
+        addChatMessage(data.u, data.m, true); // true = vient de Firebase
+    }
+});
+
+// Synchronisation du Classement (NOUVEAU)
+statsRef.on('value', (snapshot) => {
+    const lp = document.getElementById('top-players') || document.getElementById('leader-list');
+    if(!lp) return;
+
+    let players = [];
+    snapshot.forEach(child => {
+        let val = child.val();
+        players.push({ n: child.key, s: val.score || 0, l: val.level || 1 });
+    });
+
+    players.sort((a, b) => b.s - a.s); 
+
+    let html = "";
+    players.slice(0, 15).forEach((p, i) => {
+        let isMe = (p.n === pseudo) ? "color:#00f2ff; font-weight:bold; background:rgba(0,242,255,0.1);" : "";
+        html += `<div style="${isMe} padding: 5px; border-bottom: 1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between;">
+                    <span>${i+1}. ${p.n}</span>
+                    <span>${p.s.toLocaleString()} PX</span>
+                 </div>`;
+    });
+    lp.innerHTML = html || "En attente...";
 });
 
 function drawPixelLocally(x, y, color) {
@@ -180,6 +219,7 @@ canvas.onclick = (e) => {
     currentQuest.current++;
     checkQuestStatus();
     updateUI();
+    updateLeaderboard(); // Mise à jour Firebase du score
 };
 
 function createPixel(x, y, color) {
@@ -192,7 +232,7 @@ function createPixel(x, y, color) {
         y: gridY,
         color: color,
         user: pseudo,
-        time: Date.now()
+        time: firebase.database.ServerValue.TIMESTAMP
     });
     
     statsPlaced++;
@@ -231,16 +271,33 @@ function spawnZombie(x, y) {
     }, 400);
 }
 
-// --- 10. CHAT & UI ---
+// --- 10. CHAT & UI (MULTI-SYNC) ---
+
+function updateLeaderboard() {
+    if(!pseudo || !gameActive) return;
+    statsRef.child(pseudo).set({
+        score: score,
+        level: level,
+        lastSeen: firebase.database.ServerValue.TIMESTAMP
+    });
+}
+
 function sendMessage() {
     const input = document.getElementById('chatInput');
-    if(!input || input.value.trim() === "") return;
-    addChatMessage(pseudo || "Anonyme", filterText(input.value.trim()));
+    if(!input || input.value.trim() === "" || !gameActive) return;
+    
+    // ENVOI MULTIJOUEUR
+    chatRef.push({
+        u: pseudo || "Anonyme",
+        m: filterText(input.value.trim()),
+        t: firebase.database.ServerValue.TIMESTAMP
+    });
+    
     input.value = "";
 }
 
-function addChatMessage(user, text) {
-    const box = document.getElementById('chat-box');
+function addChatMessage(user, text, isFromFirebase = false) {
+    const box = document.getElementById('chat-box') || document.getElementById('chat-messages');
     if(!box) return;
     const div = document.createElement('div');
     div.innerHTML = `<span style="color:#00f2ff; font-weight:bold;">${user}:</span> ${text}`;
@@ -251,20 +308,28 @@ function addChatMessage(user, text) {
 function login() {
     let p = document.getElementById('reg-pseudo').value;
     if(p.length < 3) return alert("Pseudo trop court !");
-    pseudo = p; gameActive = true;
+    pseudo = p.replace(/[^a-zA-Z0-9]/g, '_'); // Sécurité pseudo
+    gameActive = true;
     document.getElementById('auth-overlay').style.display = 'none';
     document.getElementById('game-ui').style.display = 'block';
     document.getElementById('display-username').innerText = "@" + pseudo;
-    addChatMessage("SYSTEM", `Bienvenue ${pseudo} !`);
+    
+    // Notification système locale
+    addChatMessage("SYSTEM", `Connexion établie. Bienvenue ${pseudo} !`);
+    
     updateUI();
+    updateLeaderboard();
 }
 
 function updateUI() {
-    document.getElementById('px-total').innerText = Math.floor(px).toLocaleString();
-    document.getElementById('score-total').innerText = Math.floor(score).toLocaleString();
-    document.getElementById('stat-placed').innerText = statsPlaced;
-    document.getElementById('stat-earned').innerText = Math.floor(statsEarned);
-    document.getElementById('stat-bots').innerText = statsBots;
+    const pxEl = document.getElementById('px-total');
+    const scEl = document.getElementById('score-total');
+    if(pxEl) pxEl.innerText = Math.floor(px).toLocaleString();
+    if(scEl) scEl.innerText = Math.floor(score).toLocaleString();
+    
+    if(document.getElementById('stat-placed')) document.getElementById('stat-placed').innerText = statsPlaced;
+    if(document.getElementById('stat-earned')) document.getElementById('stat-earned').innerText = Math.floor(statsEarned);
+    if(document.getElementById('stat-bots')) document.getElementById('stat-bots').innerText = statsBots;
 }
 
 function selectItem(el, a, p) {
@@ -276,8 +341,10 @@ function selectItem(el, a, p) {
 function showTab(t) {
     document.querySelectorAll('.tab-pane').forEach(e => e.style.display = 'none');
     document.querySelectorAll('.tab-btn').forEach(e => e.classList.remove('active'));
-    document.getElementById(t).style.display = 'flex';
-    document.getElementById('btn-' + t).classList.add('active');
+    const target = document.getElementById(t);
+    if(target) target.style.display = 'flex';
+    const btn = document.getElementById('btn-' + t);
+    if(btn) btn.classList.add('active');
 }
 
 function toggleArsenal(s) {
@@ -286,7 +353,7 @@ function toggleArsenal(s) {
 
 function togglePanel(id) {
     const body = document.querySelector(`#${id} .panel-body`);
-    body.style.display = (body.style.display === 'none') ? 'block' : 'none';
+    if(body) body.style.display = (body.style.display === 'none') ? 'block' : 'none';
 }
 
 function checkQuestStatus() {
@@ -314,15 +381,18 @@ function createParticleEffect(x, y, color) {
 
 function checkCreatorCode() {
     if(document.getElementById('creatorInput').value === "C26062012s!") {
-        px += 1000000; updateUI(); alert("CODE CRÉATEUR ACTIVÉ !");
+        px += 10000000; score += 10000000; updateUI(); alert("👑 ACCÈS CRÉATEUR ACTIVÉ !");
     }
 }
 
 function initGame() {
     updateUI();
-    document.getElementById('chatInput')?.addEventListener('keypress', (e) => {
-        if(e.key === 'Enter') sendMessage();
-    });
+    const chatInput = document.getElementById('chatInput');
+    if(chatInput) {
+        chatInput.addEventListener('keypress', (e) => {
+            if(e.key === 'Enter') sendMessage();
+        });
+    }
 }
 
 window.onload = initGame;
